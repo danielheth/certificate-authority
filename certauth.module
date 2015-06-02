@@ -1,0 +1,272 @@
+<?php
+
+/**
+* This function defines the URL to the page created etc.
+* See http://api.drupal.org/api/function/hook_menu/6
+*/
+function certauth_menu() {
+	$items = array();
+
+	$items['certauth/form'] = array(
+	'title' => t('Request a New Website Certificate and Key'),
+	'page callback' => 'certauth_form',
+	'access arguments' => array('access content'),
+	'description' => t('A front end UI for generating website certificates for my personal certificate authority.'),
+	'type' => MENU_CALLBACK,
+	); 
+
+	$items['certauth/download'] = array(
+	'page callback' => 'certauth_download',
+	'access arguments' => array('administer site configuration'),
+	'type' => MENU_CALLBACK,
+	);
+
+	return $items;
+}
+
+/**
+* This function gets called in the browser address bar for:
+* "http://yourhost/certauth/form" or
+* "http://yourhost/?q=certauth/form". It will generate
+* a page with this form on it.
+*/
+function certauth_form() {
+	// This form calls the form builder function via the
+	// drupal_get_form() function which takes the name of this form builder
+	// function as an argument. It returns the results to display the form.
+
+	return drupal_get_form('certauth_my_form');
+}
+
+/**
+* This function is called the "form builder". It builds the form.
+* Notice, it takes one argument, the $form_state
+*/
+function certauth_my_form($form_state) {
+	$form['domain'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Full Domain Name (ex: www.example.com)'),
+		'#required' => TRUE,
+	);
+
+	$form['days'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Number of Days (ex: 356)'),
+		'#description' => t("Enter the number of days this certificate should remain valid.  356days = 1year"),
+		'#required' => TRUE,
+	);
+
+	$form['country'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Country (ex: US)'),
+		'#required' => TRUE,
+	);
+
+	$form['state'] = array(
+		'#type' => 'textfield',
+		'#title' => t('State (ex: California)'),
+		'#required' => TRUE,
+	);
+
+	$form['city'] = array(
+		'#type' => 'textfield',
+		'#title' => t('City (ex: Palo Alto)'),
+		'#required' => TRUE,
+	);
+
+	$form['company'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Company (ex: Example, Inc.)'),
+		'#required' => TRUE,
+	);
+
+	$form['department'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Department (ex: IT)'),
+		'#required' => TRUE,
+	);
+
+	$form['email'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Email Address (ex: webmaster@example.com)'),
+		'#required' => TRUE,
+	);
+
+	$form['password'] = array(
+		'#type' => 'password',
+		'#title' => t('Password'),
+		'#description' => t("Please enter the password you used when you setup your Certificate Authority."),
+		'#size' => 32,
+		'#maxlength' => 32,
+		'#required' => TRUE,
+	);
+
+	$form['submit'] = array(
+		'#type' => 'submit',
+		'#value' => 'Submit',
+	);
+
+	return $form;
+}
+
+// This adds a handler/function to validate the data entered into the
+// "year of birth" field to make sure it's between the values of 1900
+// and 2000. If not, it displays an error. The value report is // $form_state['values'] (see http&#58;//drupal.org/node/144132#form-state).
+//
+// Notice the name of the function. It is simply the name of the form
+// followed by '_validate'. This is the default validation function.
+function certauth_my_form_validate($form, &$form_state) {
+	$domain_name = $form_state['values']['domain'];
+	if(! preg_match('/^[a-zA-Z0-9]*((-|\.)?[a-zA-Z0-9])*\.([a-zA-Z]{2,4})$/', $domain_name, $matches)) {
+		form_set_error('domain', 'Domain name must consist of letters, numbers, and certain punctuation only (.-). ' . $domain_name);
+	}
+
+	$days = $form_state['values']['days'];
+
+	$country = $form_state['values']['country'];
+	if (strlen($country) > 2) {
+		form_set_error('country', 'Country can only contain two characters. ' . $country);
+	}
+
+	$state = $form_state['values']['state'];
+	$city = $form_state['values']['city'];
+	$company = $form_state['values']['company'];
+	$department = $form_state['values']['department'];
+	$email = $form_state['values']['email'];
+	$password = $form_state['values']['password'];
+}
+
+
+
+// Adds a submit handler/function to our form to send a successful
+// completion message to the screen.
+function certauth_my_form_submit($form, &$form_state) {
+	$domain_name = $form_state['values']['domain'];
+	$days = $form_state['values']['days'];
+
+	$country = $form_state['values']['country'];
+	$state = $form_state['values']['state'];
+	$city = $form_state['values']['city'];
+	$company = $form_state['values']['company'];
+	$department = $form_state['values']['department'];
+	$email = $form_state['values']['email'];
+	$password = $form_state['values']['password'];
+
+
+
+	$path = "C:\\CA\\";
+	$serial_file = $path . "serial";
+
+	// read serial number and increment
+	$serial_str = "1"; //initial serial number
+	if (file_exists($serial_file)) {
+		$f = fopen($serial_file, 'r');
+		$serial_str = fgets($f);
+		fclose($f);
+		$serial = intval($serial_str) + 1;
+	}
+	$serial_str = strval($serial);
+
+	$path = $path . $serial_str . "-" . $domain_name;
+	if (!file_exists($path)) {
+	    mkdir($path, 0777, true);
+	}
+	chdir($path);
+
+
+	// first - we need to generate a key
+	$command = "openssl genrsa -out " . $domain_name . ".key 2048 -sha256";
+	//drupal_set_message(t($command));
+	exec($command);
+
+
+	// second - create csr
+	$command = "openssl req -new -sha256 -key " . $domain_name . ".key -out " . $domain_name . ".csr -subj \"/C=" . $country . "/ST=" . $state . "/L=" . $city . "/O=" . $company . "/OU=" . $department . "/CN=" . $domain_name . "/emailAddress=" . $email . "\" -config ../openssl.cnf";
+	//drupal_set_message(t($command));
+	exec($command);
+
+
+	// third - we need to generate the actual certificate
+	$command = "openssl x509 -req -sha256 -days " . $days . " -in " . $domain_name . ".csr -CA ../ca.crt -CAkey ../ca.key -out " . $domain_name . ".crt -set_serial " . $serial_str . " -passin pass:" . $password;
+	//drupal_set_message(t($command));
+	exec($command);
+
+
+	//copy CA public file into directory...
+	//drupal_set_message(t("Copying ca.crt into " . $path));
+	copy( "../ca.crt", $path . "\\ca.crt" );
+
+
+	//delete the csr file... no longer needed
+	unlink($path . "\\" . $domain_name . ".csr");
+
+
+	//zip up the whole directory
+	//drupal_set_message(t("Zipping up " . $path));	
+	$zip = new ZipArchive();
+	$zip->open($domain_name . ".zip", ZipArchive::CREATE | ZipArchive::OVERWRITE);
+	$files = new RecursiveIteratorIterator( new RecursiveDirectoryIterator($path), RecursiveIteratorIterator::LEAVES_ONLY );
+	foreach ($files as $name => $file)
+	{
+	    if (!$file->isDir())
+	    {
+	        $filePath = $file->getRealPath();
+	        $relativePath = substr($filePath, strlen($path) + 1);
+		    $zip->addFile($filePath, $relativePath);
+	    }
+	}
+	$zip->close();
+
+
+
+
+
+	//save serial string to disk
+	//drupal_set_message(t("Saving new serial number... " . $serial_str));
+	$f = fopen($serial_file, 'w');
+	fwrite($f, $serial_str);
+	fclose($f);
+
+
+	$url_path = "/certauth/download?serial=" . $serial_str . "&domain=" . $domain_name;
+
+	drupal_set_message(t('The requested certificate has been generated and available for download: <a href="' . $url_path . '">' . $domain_name . '.zip</a>'));
+	
+	//$form_state['redirect'] = $url_path;
+
+	/*
+	$form_state['redirect'] = array(
+		'certauth/download',
+		array(
+			'query' => array(
+				'serial' => $serial_str,
+				'domain' => $domain_name
+			)
+		),
+	);  
+	*/  
+}
+
+
+
+function certauth_download() {
+	if (!isset($_GET['serial'])) {
+		return drupal_not_found();
+	} else { $serial = $_GET['serial']; }
+	if (!isset($_GET['domain'])) {
+		return drupal_not_found();
+	} else { $domain = $_GET['domain']; }
+
+	$zipfile = "C:\\CA\\" . $serial . "-" . $domain . "\\" . $domain . ".zip";
+	if (file_exists($zipfile)) {
+		#file_transfer($zipfile, array('Content-disposition' => 'attachment; filename='. $domain . ".zip"));
+
+		drupal_add_http_header('Content-disposition', 'attachment; filename=' . $domain . ".zip");
+    	readfile($zipfile);
+
+	} else {
+		return drupal_access_denied();
+	}
+}
+
+
