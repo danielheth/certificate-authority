@@ -22,4 +22,4 @@ openssl req -new -x509 -extensions v3_ca -key ca.key -out ca.crt -days 3650
 Place both the ca.key and ca.crt file within the c:\CA directory on your Drupal server.  Then copy the certauth.info and certauth.module files into your htdocs\modules\certauth\   directory.  Log into Drupal and enable this module.
 
 ## Testing
-Browse to http(s)://[your drupal server]/certauth/form and fill out the form and hit submit.  You'll receive a link to the completed 
+Browse to http(s)://[your drupal server]/certauth/form and fill out the form and hit submit.  You'll receive a link to the completed zip bundle which contains your new certificate, the related key and the CA public certificate.
